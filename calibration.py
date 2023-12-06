@@ -35,7 +35,7 @@ knowledge of the CeCILL license and that you accept its terms.
 
 from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
-from numpy import array, linalg
+import numpy as np
 
 from pyworld3 import World3, Population, Pollution, Agriculture, Capital, Resource, hello_world3
 
@@ -51,13 +51,6 @@ each sectors will take data as input and output some other data, this will be co
 this will allow us to calibrate each sectors independently of the other
 """
 
-world3_output = ["ppolx", # Pollution sector 
-                 "pop",   # Population sector
-                 "nr", "nrfr", # Resource sector
-                 "al", "pal", "f", "fpc", # Agriculture sector
-                 "ic", "io" # Capital sector
-                ]
-world3_input = ["zpgt"]
 
 class Simulation(MDODiscipline):
 
@@ -93,8 +86,8 @@ class Calibration(MDODiscipline):
         ppolx = self.get_inputs_by_name(["ppolx"])
 
         
-        obj = linalg.norm(ppolx)
-        self.local_data['obj'] = array([obj])
+        obj = np.linalg.norm(ppolx)
+        self.local_data['obj'] = np.array([obj])
 
 
 class Population_D(MDODiscipline,Population):
@@ -145,38 +138,99 @@ class Pollution_D(MDODiscipline,Pollution):
         pass
 
 
-class Resource_D(MDODiscipline):
-
-    def __init__(self,residual_form=False):
-        super().__init__()
-        self.inputs_list = ["nri", "nruf1", "nruf2"]
-        self.input_grammar.update_from_names(self.inputs_list) #à compléter
-        self.output_grammar.update_from_names() #à compléter
-
-    def _run(self):
-        inputs = self.get_inputs_by_name(self.inputs_list)
-        nri = inputs[0]
-        nruf1 = inputs[1]
-        nruf2 = inputs[2]
-        print(inputs)
-
-        _res = Resource()
-        _res.init_resource_constants(*inputs)
-        _res.init_resource_variables()
-        _res.set_resource_table_functions(json_file= None) # edit the none to a path to a json file describing table function
-        _res.set_resource_delay_functions(method="euler")
-        _res.loop0_resource()
-
         for k_ in range(1, self.n):
-            _res.loopk_resource(k_-1, k_, k_-1, k_)
+            _pol.loopk_pollution(k_-1, k_, k_-1, k_)
 
-configure_logger()
 
-#disc = [Resource_D(), Capital_D(), Pollution_D(), Population_D(), Agriculture_D(), World3_D()]
-disc = [Simulation(), Calibration()]
+"""
+Description de l'idée:
+
+input_var_dict est le dictionnaire des variables d'optimisation possible, pour l'instant aucun tri
+n'a été fait et il faudra enlever les variables "non calibrable" du style des initialisations de stocks
+la clé du dict est le nom de la var d'optim (var de design du design space de GEMSEO) et elle est 
+associé à un dict stockant: l_b la lower bound, u_p la upper bound, value, la valeur initiale
+pour faciliter la génération du design space cf plus bas le code:
 
 design_space = create_design_space()
-design_space.add_variable("zpgt", 1, l_b=1900, u_b=4000, value=array([2050]))
+for key, values in Resource_D.input_var_dict:
+    design_space.add_variable(key, 1, **values)
+
+
+exogeneous_var_dict représente le dictionnaire pour définir les vairables éxogènes sachant qu'on ne veut pas utiliser les méthodes de calcul
+données avec l'option Alone = True, car sinon on utiliserait les courbes par défaut de pyworld3 
+Elles ont été choisies directement à partir des variables utilisées dans loop0_exogenous dans Resource de pyworld3
+On a besoin des infos données par les modéliseurs pour définir les valeurs, et on les récupère avec ces lignes de code :
+for exo_var in self.exogeneous_var_names:
+            assert Resource_D.exogeneous_var_dict[exo_var].shape[0] >= self.n
+            setattr(self, exo_var, Resource_D.exogeneous_var_dict[exo_var])
+
+
+"""
+class Resource_D(MDODiscipline, Resource):
+    input_var_dict = {
+        "nri":   {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
+        "nruf1": {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
+        "nruf2": {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
+    }
+    exogeneous_var_dict = {
+        "pop": np.full(), 
+        "pop1": ,
+        "ic": , 
+        "icir": , 
+        "icdr": , 
+        "io": , 
+        "iopc":
+    }
+    output_var_names = ["nr", "nrfr", "nruf", "nrur", "pcrum", "fcaor", "fcaor1", "fcaor2"]
+
+    def __init__(self,residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
+        super(self, MDODiscipline).__init__() # init the MDODiscipline parent class
+        super(self, Resource).__init__(year_min=year_min, year_max=year_max, dt=dt, pyear=pyear, verbose=verbose) # init the parent Resource class
+
+        self.input_var_names = list(Resource_D.input_var_dict.keys())
+        self.exogeneous_var_names = list(Resource_D.exogeneous_var_dict.keys())
+        self.output_var_names = Resource_D.output_var_names
+
+        self.input_grammar.update_from_names(self.input_var_names)
+        self.output_grammar.update_from_names(self.output_var_names)
+        
+    def _run(self):
+        input_vars_generator = self.get_inputs_by_name(self.input_var_names)
+        input_var_values = next(input_vars_generator)
+        assert len(input_var_values) == len(self.input_var_names)
+
+        input_var_dict = {self.input_var_names[i]: input_var_values[i] for i in range(len(input_var_values))}
+        logger.critical("generator: %s, values: %s", input_vars_generator, input_var_values)
+
+        self.init_resource_constants(**input_var_dict)
+        self.init_resource_variables()
+        self.set_resource_table_functions(json_file= None) # edit the none to a path to a json file describing table function
+        self.set_resource_delay_functions(method="euler")
+
+        #_res.init_exogenous_inputs() # useless c'est set par la boucle suivante:
+        for exo_var in self.exogeneous_var_names:
+            assert Resource_D.exogeneous_var_dict[exo_var].shape[0] >= self.n
+            setattr(self, exo_var, Resource_D.exogeneous_var_dict[exo_var])
+
+        #_res.loop0_resource(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
+        self.loop0_resource(alone=False)
+
+
+        for k_ in range(1, self.n):
+            self.loopk_resource(k_-1, k_, k_-1, k_, alone=False)
+
+
+#### Calibration section:
+
+
+logger = configure_logger()
+
+#disc = [Resource_D(), Capital_D(), Pollution_D(), Population_D(), Agriculture_D(), World3_D()]
+disc = [Resource_D(year_min=1900, year_max=2100, dt=1), Calibration()]
+
+design_space = create_design_space()
+for key, values in Resource_D.input_var_dict:
+    design_space.add_variable(key, 1, **values)
 
 scenario = create_scenario(disc, "MDF", "obj", design_space)
 scenario.set_differentiation_method("finite_differences", 20)
