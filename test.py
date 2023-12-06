@@ -34,67 +34,31 @@ knowledge of the CeCILL license and that you accept its terms.
 """
 
 from gemseo.core.discipline import MDODiscipline
-from gemseo import create_design_space, create_scenario, configure_logger
-from numpy import array, linalg
+from gemseo import create_design_space, create_scenario
+from numpy import ones
 
 from pyworld3 import World3, Population, Pollution, Agriculture, Capital, Resource, hello_world3
 
-"""
-TODO: 
-separate calibration in (at least) two parts/disciplines:
-    - a "simulation" part that runs pyworld3 model and output every data possible
-    - a "calibration" part that computes from the 1st the objective fucntion (with respect to calibration data) 
-      for this second one a GEMSEO plugin already exists to provide the appropriate Discipline
 
-separate the World3_D discipline into 5 sectors
-each sectors will take data as input and output some other data, this will be coupling between disciplines
-this will allow us to calibrate each sectors independently of the other
-"""
+def f_obj(model: World3):
+    return max(model.ppol)
 
-world3_output = ["ppolx", # Pollution sector 
-                 "pop",   # Population sector
-                 "nr", "nrfr", # Resource sector
-                 "al", "pal", "f", "fpc", # Agriculture sector
-                 "ic", "io" # Capital sector
-                ]
-world3_input = ["zpgt"]
-
-class Simulation(MDODiscipline):
+class World3_D(MDODiscipline):
 
     def __init__(self,residual_form=False):
-        super().__init__()
-        self.input_grammar.update_from_names(world3_input)
-        self.output_grammar.update_from_names(world3_output)
+        super(World3, self).__init__()
+        self.input_grammar.update_from_names([])
+        self.output_grammar.update_from_names(['obj'])
 
     def _run(self):
-        params = {}
-        for input in world3_input:
-            params[input] = next(self.get_inputs_by_name([input]))
-
         _world3 = World3()
-        _world3.init_world3_constants(**params)
+        _world3.init_world3_constants(**self.local_data)
         _world3.init_world3_variables()
         _world3.set_world3_table_functions()
         _world3.set_world3_delay_functions()
         _world3.run_world3(fast=True)
 
-        for out in world3_output:
-            self.local_data[out] = getattr(_world3, out)
-
-
-class Calibration(MDODiscipline):
-
-    def __init__(self, residual_form = False):
-        super().__init__()
-        self.input_grammar.update_from_names(world3_output)
-        self.output_grammar.update_from_names(['obj'])
-
-    def _run(self):
-        ppolx = self.get_inputs_by_name(["ppolx"])
-
-        
-        obj = linalg.norm(ppolx)
-        self.local_data['obj'] = array([obj])
+        self.local_data['obj'] = f_obj(_world3)
 
 
 class Population_D(MDODiscipline,Population):
@@ -145,42 +109,28 @@ class Pollution_D(MDODiscipline,Pollution):
         pass
 
 
-class Resource_D(MDODiscipline):
+class Resource_D(MDODiscipline,Resource):
 
     def __init__(self,residual_form=False):
-        super().__init__()
-        self.inputs_list = ["nri", "nruf1", "nruf2"]
-        self.input_grammar.update_from_names(self.inputs_list) #à compléter
+        super(Resource,self).__init__()
+        self.input_grammar.update_from_names() #à compléter
         self.output_grammar.update_from_names() #à compléter
 
     def _run(self):
-        inputs = self.get_inputs_by_name(self.inputs_list)
-        nri = inputs[0]
-        nruf1 = inputs[1]
-        nruf2 = inputs[2]
-        print(inputs)
+        #à compléter
+        pass
 
-        _res = Resource()
-        _res.init_resource_constants(*inputs)
-        _res.init_resource_variables()
-        _res.set_resource_table_functions(json_file= None) # edit the none to a path to a json file describing table function
-        _res.set_resource_delay_functions(method="euler")
-        _res.loop0_resource()
 
-        for k_ in range(1, self.n):
-            _res.loopk_resource(k_-1, k_, k_-1, k_)
-
-configure_logger()
 
 #disc = [Resource_D(), Capital_D(), Pollution_D(), Population_D(), Agriculture_D(), World3_D()]
-disc = [Simulation(), Calibration()]
+disc = [World3_D()]
 
 design_space = create_design_space()
-design_space.add_variable("zpgt", 1, l_b=1900, u_b=4000, value=array([2050]))
+design_space.add_variable("zpgt", 1, l_b=1900, u_b=4000, value=ones(1))
 
 scenario = create_scenario(disc, "MDF", "obj", design_space)
-scenario.set_differentiation_method("finite_differences", 20)
+scenario.set_differentiation_method("finite_differences", 1e-4)
 
-params = {"max_iter":10, "algo":"SLSQP"}
+params = {"max_iter":1000}
 
 scenario.execute(input_data=params)
