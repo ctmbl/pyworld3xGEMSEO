@@ -34,103 +34,47 @@ knowledge of the CeCILL license and that you accept its terms.
 """
 
 from gemseo.core.discipline import MDODiscipline
-from gemseo import create_design_space, create_scenario
-from numpy import ones
+from gemseo import create_design_space, create_scenario, configure_logger
+from numpy import ones, linalg
 
-from pyworld3 import World3, Population, Pollution, Agriculture, Capital, Resource, hello_world3
+from pyworld3 import World3
 
 
 def f_obj(model: World3):
-    return max(model.ppol)
+    return linalg.norm(model.ppol)
 
 class World3_D(MDODiscipline):
 
     def __init__(self,residual_form=False):
-        super(World3, self).__init__()
-        self.input_grammar.update_from_names([])
+        super().__init__()
+        self.input_var_names = ["zpgt"]
+        self.input_grammar.update_from_names(self.input_var_names)
         self.output_grammar.update_from_names(['obj'])
 
     def _run(self):
+        input_vars_generator = self.get_inputs_by_name(self.input_var_names)
+        input_var_values = next(input_vars_generator)
+        print("generator: ", input_vars_generator, "values:", input_var_values)
+        
         _world3 = World3()
-        _world3.init_world3_constants(**self.local_data)
+        _world3.init_world3_constants(zpgt=input_var_values[0])
         _world3.init_world3_variables()
         _world3.set_world3_table_functions()
         _world3.set_world3_delay_functions()
         _world3.run_world3(fast=True)
 
-        self.local_data['obj'] = f_obj(_world3)
+        self.local_data['obj'] = [f_obj(_world3)]
 
 
-class Population_D(MDODiscipline,Population):
-
-    def __init__(self,residual_form=False):
-        super(Population,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-class Capital_D(MDODiscipline,Capital):
-
-    def __init__(self,residual_form=False):
-        super(Capital,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-class Agriculture_D(MDODiscipline,Agriculture):
-
-    def __init__(self,residual_form=False):
-        super(Agriculture,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-class Pollution_D(MDODiscipline,Pollution):
-
-    def __init__(self,residual_form=False):
-        super(Pollution,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-    def _run(self):
-        #à compléter
-        pass
-
-
-class Resource_D(MDODiscipline,Resource):
-
-    def __init__(self,residual_form=False):
-        super(Resource,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-#disc = [Resource_D(), Capital_D(), Pollution_D(), Population_D(), Agriculture_D(), World3_D()]
+configure_logger()
 disc = [World3_D()]
 
 design_space = create_design_space()
-design_space.add_variable("zpgt", 1, l_b=1900, u_b=4000, value=ones(1))
+design_space.add_variable("zpgt", 1, l_b=1900, u_b=4000, value=ones(1)*2000)
 
 scenario = create_scenario(disc, "MDF", "obj", design_space)
 scenario.set_differentiation_method("finite_differences", 1e-4)
 
-params = {"max_iter":1000}
+params = {"max_iter":1000, "algo":"SLSQP"}
 
 scenario.execute(input_data=params)
