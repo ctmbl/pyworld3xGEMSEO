@@ -37,6 +37,8 @@ from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
 from numpy import ones, linalg
 
+import logging
+
 from pyworld3 import World3
 
 
@@ -54,7 +56,7 @@ class World3_D(MDODiscipline):
     def _run(self):
         input_vars_generator = self.get_inputs_by_name(self.input_var_names)
         input_var_values = next(input_vars_generator)
-        print("generator: ", input_vars_generator, "values:", input_var_values)
+        logger.info("generator: %s, values: %s", input_vars_generator, input_var_values)
         
         _world3 = World3()
         _world3.init_world3_constants(zpgt=input_var_values[0])
@@ -66,7 +68,7 @@ class World3_D(MDODiscipline):
         self.local_data['obj'] = [f_obj(_world3)]
 
 
-configure_logger()
+logger = configure_logger(level=logging.INFO)
 disc = [World3_D()]
 
 design_space = create_design_space()
