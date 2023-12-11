@@ -33,6 +33,8 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL license and that you accept its terms.
 """
 
+import copy
+
 from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
 import numpy as np
@@ -221,7 +223,25 @@ class Resource_D(MDODiscipline, Resource):
 
 
 #### Calibration section:
+class Calibration(MDODiscipline):
+    def __init__(self, data, output_name):
+        super().__init__() # init the MDODiscipline parent class
+        self.data_names = list(data.keys())
+        self.data = copy.deepcopy(data)
+        self.output_name = output_name
+        self.n = len(self.data_names)
+        self.d = len(self.data[self.data_names[0]])
 
+        self.input_grammar.update_from_names(self.data_names)
+        self.output_grammar.update_from_names([output_name])
+
+    def _run(self):
+        A = np.empty((self.n, self.d))
+        for i in range(self.n):
+            data_name = self.data_names[i]
+            A[i] = self.data[data_name] - self.local_data[data_name]
+            logger.debug("A[i]: %s | data[%s] %s", A[i], data_name, self.data[data_name])
+        self.local_data[self.output_name] = np.array([np.linalg.norm(A)])
 
 logger = configure_logger()
 
