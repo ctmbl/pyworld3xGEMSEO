@@ -90,8 +90,98 @@ class Calibration(MDODiscipline):
         self.local_data['obj'] = np.array([obj])
 
 
-class Population_D(MDODiscipline,Population):
+class Population_D(MDODiscipline):
+        
+    input_var_dict = {
+        "p1i":   {"l_b":, "u_b":, "value":}
+        "p2i": {"l_b":, "u_b":, "value":}
+        "p3i": {"l_b":, "u_b":, "value":}
+        "p4i": {"l_b":, "u_b":, "value":}
+        "dcfsn":{"l_b":, "u_b":, "value":}
+        "fcest": {"l_b":, "u_b":, "value":}
+        "hsid": {"l_b":, "u_b":, "value":}
+        "ieat": {"l_b":, "u_b":, "value":}
+        "len": {"l_b":, "u_b":, "value":}
+        "lpd": {"l_b":, "u_b":, "value":}
+        "mtfn": {"l_b":, "u_b":, "value":}
+        "pet": {"l_b":, "u_b":, "value":}
+        "rlt": {"l_b":, "u_b":, "value":}
+        "sad": {"l_b":, "u_b":, "value":}
+        "zpgt": {"l_b":, "u_b":, "value":}
 
+        }
+    exogeneous_var_dict = {
+        # industrial output
+        "io" : np.full(),
+        "io1" : np.full(),
+        "io11" : np.full(),
+        "io12" : np.full(),
+        "io2" : np.full(),
+        "iopc" : np.full(),
+        # index of persistent pollution
+        "ppolx" : np.full(),
+        # service output
+        "so" : np.full(),
+        "so1" : np.full(),
+        "so11" : np.full(),
+        "so12" : np.full(),
+        "so2" : np.full(),
+        "sopc" : np.full(),
+        # food
+        "f" : np.full(),
+        "f1" : np.full(),
+        "f11" : np.full(),
+        "f12" : np.full(),
+        "f2" : np.full(),
+        "fpc" : np.full()
+    }
+    output_var_names : ["pop","p1","p2","p3","p4","d1","d2","d3","d4","mat1","mat2","mat3","d","cdr",
+                        "fpu","le","lmc","lmf","lmhs","lmhs1","lmhs2","lmp","m1","m2","m3","m4","ehspc",
+                        "hsapc","b","cbr","cmi","cmple","tf","dtf","dcfs","fce","fie","fm","frsn","mtf"
+                        ,"nfc","ple","sfsn","aiopc","diopc","fcapc","fcfpc","fsafc"]
+
+    def __init__(self, residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
+        super(self, MDODiscipline).__init__() # init the MDODiscipline parent class
+        self.population_init_params = {"year_min":year_min, "year_max":year_max, "dt":dt, "pyear":pyear, "verbose":verbose}
+
+        self.input_var_names = list(Population_D.input_var_dict.keys())
+        self.exogeneous_var_names = list(Population_D.exogeneous_var_dict.keys())
+        self.output_var_names = Population_D.output_var_names
+
+        self.input_grammar.update_from_names(self.input_var_names)
+        self.output_grammar.update_from_names(self.output_var_names)
+          
+    def _run(self):
+            # shouldn't we use self.local_data[] instead?
+        input_vars_generator = self.get_inputs_by_name(self.input_var_names) # wtf?
+        input_var_values = next(input_vars_generator)
+        logger.debug("Values: %s", input_var_values)
+        assert len(input_var_values) == len(self.input_var_names)
+
+        _pop = Population(**self.population_init_params)
+
+        input_var_dict = {_pop.input_var_names[i]: input_var_values[i] for i in range(len(input_var_values))}
+        logger.critical("generator: %s, values: %s", input_vars_generator, input_var_values)
+
+        _pop.init_population_constants(**input_var_dict)
+        _pop.init_population_variables()
+        _pop.set_population_table_functions(json_file= None) # edit the none to a path to a json file describing table function
+        _pop.set_population_delay_functions(method="euler")
+
+            #_pop.init_exogenous_inputs() # useless c'est set par la boucle suivante:
+        for exo_var in _pop.exogeneous_var_names:
+            assert Population_D.exogeneous_var_dict[exo_var].shape[0] >= _pop.n
+            setattr(_pop, exo_var, Population_D.exogeneous_var_dict[exo_var])
+
+                #_pop.loop0_population(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
+            _pop.loop0_population(alone=False)
+
+        for k_ in range(1, _pop.n):
+            _pop.loopk_population(k_-1, k_, k_-1, k_, alone=False)
+
+        for output in population_D.output_var_names:
+            self.local_data[output] = getattr(_pop, output).copy()
+    
     def __init__(self,residual_form=False):
         super(Population,self).__init__()
         self.input_grammar.update_from_names() #à compléter
@@ -166,7 +256,7 @@ for exo_var in self.exogeneous_var_names:
 
 
 """
-class Resource_D(MDODiscipline, Resource):
+class Resource_D(MDODiscipline):
     input_var_dict = {
         "nri":   {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
         "nruf1": {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
@@ -174,18 +264,18 @@ class Resource_D(MDODiscipline, Resource):
     }
     exogeneous_var_dict = {
         "pop": np.full(), 
-        "pop1": ,
-        "ic": , 
-        "icir": , 
-        "icdr": , 
-        "io": , 
-        "iopc":
+        "pop1": np.full(),
+        "ic": np.full(), 
+        "icir": np.full(), 
+        "icdr": np.full(), 
+        "io": np.full(), 
+        "iopc": np.full()
     }
     output_var_names = ["nr", "nrfr", "nruf", "nrur", "pcrum", "fcaor", "fcaor1", "fcaor2"]
 
-    def __init__(self,residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
+    def __init__(self, residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
         super(self, MDODiscipline).__init__() # init the MDODiscipline parent class
-        super(self, Resource).__init__(year_min=year_min, year_max=year_max, dt=dt, pyear=pyear, verbose=verbose) # init the parent Resource class
+        self.resource_init_params = {"year_min":year_min, "year_max":year_max, "dt":dt, "pyear":pyear, "verbose":verbose}
 
         self.input_var_names = list(Resource_D.input_var_dict.keys())
         self.exogeneous_var_names = list(Resource_D.exogeneous_var_dict.keys())
@@ -195,29 +285,41 @@ class Resource_D(MDODiscipline, Resource):
         self.output_grammar.update_from_names(self.output_var_names)
         
     def _run(self):
-        input_vars_generator = self.get_inputs_by_name(self.input_var_names)
+        # shouldn't we use self.local_data[] instead?
+        input_vars_generator = self.get_inputs_by_name(self.input_var_names) # wtf?
         input_var_values = next(input_vars_generator)
+        logger.debug("Values: %s", input_var_values)
         assert len(input_var_values) == len(self.input_var_names)
 
-        input_var_dict = {self.input_var_names[i]: input_var_values[i] for i in range(len(input_var_values))}
+        _res = Resource(**self.resource_init_params)
+
+        input_var_dict = {_res.input_var_names[i]: input_var_values[i] for i in range(len(input_var_values))}
         logger.critical("generator: %s, values: %s", input_vars_generator, input_var_values)
 
-        self.init_resource_constants(**input_var_dict)
-        self.init_resource_variables()
-        self.set_resource_table_functions(json_file= None) # edit the none to a path to a json file describing table function
-        self.set_resource_delay_functions(method="euler")
+        _res.init_resource_constants(**input_var_dict)
+        _res.init_resource_variables()
+        _res.set_resource_table_functions(json_file= None) # edit the none to a path to a json file describing table function
+        _res.set_resource_delay_functions(method="euler")
 
         #_res.init_exogenous_inputs() # useless c'est set par la boucle suivante:
-        for exo_var in self.exogeneous_var_names:
-            assert Resource_D.exogeneous_var_dict[exo_var].shape[0] >= self.n
-            setattr(self, exo_var, Resource_D.exogeneous_var_dict[exo_var])
+        for exo_var in _res.exogeneous_var_names:
+            assert Resource_D.exogeneous_var_dict[exo_var].shape[0] >= _res.n
+            setattr(_res, exo_var, Resource_D.exogeneous_var_dict[exo_var])
 
         #_res.loop0_resource(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
-        self.loop0_resource(alone=False)
+        _res.loop0_resource(alone=False)
 
 
-        for k_ in range(1, self.n):
-            self.loopk_resource(k_-1, k_, k_-1, k_, alone=False)
+        for k_ in range(1, _res.n):
+            _res.loopk_resource(k_-1, k_, k_-1, k_, alone=False)
+
+        for output in Resource_D.output_var_names:
+            self.local_data[output] = getattr(_res, output).copy() # equ to: self.local_data["nr"] = _res.nr
+            # equivalent to: (but simpler)
+            # self.local_data["nr"] = _res.nr.copy()
+            # self.local_data["nrfr"] = _res.nrfr.copy()
+            # self.local_data["nruf"] = _res.nruf.copy()
+            # etc...
 
 
 #### Calibration section:
