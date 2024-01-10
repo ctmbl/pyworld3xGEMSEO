@@ -33,14 +33,14 @@ The fact that you are presently reading this means that you have had
 knowledge of the CeCILL license and that you accept its terms.
 """
 
-import copy
+import logging
 
 from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
 import numpy as np
 
 from pyworld3 import World3, Population, Pollution, Agriculture, Capital, Resource, hello_world3
-
+from calibration_d import Calibration
 """
 TODO: 
 separate calibration in (at least) two parts/disciplines:
@@ -54,134 +54,101 @@ this will allow us to calibrate each sectors independently of the other
 """
 
 
-class Simulation(MDODiscipline):
-
-    def __init__(self,residual_form=False):
-        super().__init__()
-        self.input_grammar.update_from_names(world3_input)
-        self.output_grammar.update_from_names(world3_output)
-
-    def _run(self):
-        params = {}
-        for input in world3_input:
-            params[input] = next(self.get_inputs_by_name([input]))
-
-        _world3 = World3()
-        _world3.init_world3_constants(**params)
-        _world3.init_world3_variables()
-        _world3.set_world3_table_functions()
-        _world3.set_world3_delay_functions()
-        _world3.run_world3(fast=True)
-
-        for out in world3_output:
-            self.local_data[out] = getattr(_world3, out)
-
-
-class Calibration(MDODiscipline):
-
-    def __init__(self, residual_form = False):
-        super().__init__()
-        self.input_grammar.update_from_names(world3_output)
-        self.output_grammar.update_from_names(['obj'])
-
-    def _run(self):
-        ppolx = self.get_inputs_by_name(["ppolx"])
-
-        
-        obj = np.linalg.norm(ppolx)
-        self.local_data['obj'] = np.array([obj])
-
-
 class Population_D(MDODiscipline):
         
-    input_var_dict = {
-        "p1i":   {"l_b":, "u_b":, "value":}
-        "p2i": {"l_b":, "u_b":, "value":}
-        "p3i": {"l_b":, "u_b":, "value":}
-        "p4i": {"l_b":, "u_b":, "value":}
-        "dcfsn":{"l_b":, "u_b":, "value":} #choisi pour l'exemple de calibration
-        "fcest": {"l_b":, "u_b":, "value":}
-        "hsid": {"l_b":, "u_b":, "value":}
-        "ieat": {"l_b":, "u_b":, "value":}
-        "len": {"l_b":, "u_b":, "value":} #choisi pour l'exemple de calibration
-        "lpd": {"l_b":, "u_b":, "value":}
-        "mtfn": {"l_b":, "u_b":, "value":}
-        "pet": {"l_b":, "u_b":, "value":}
-        "rlt": {"l_b":, "u_b":, "value":}
-        "sad": {"l_b":, "u_b":, "value":}
-        "zpgt": {"l_b":, "u_b":, "value":}
-
-        }
-    exogeneous_var_dict = {
+    all_input_parameters_names = [
+        "p1i",
+        "p2i",
+        "p3i",
+        "p4i",
+        "dcfsn",
+        "fcest",
+        "hsid",
+        "ieat",
+        "len",
+        "lpd",
+        "mtfn",
+        "pet",
+        "rlt", 
+        "sad",
+        "zpgt",
+    ]
+    exogenous_data_names = [
         # industrial output
-        "io" : np.full(),
-        "io1" : np.full(),
-        "io11" : np.full(),
-        "io12" : np.full(),
-        "io2" : np.full(),
-        "iopc" : np.full(),
+        "io",
+        "io1",
+        "io11",
+        "io12",
+        "io2",
+        "iopc",
         # index of persistent pollution
-        "ppolx" : np.full(),
+        "ppolx",
         # service output
-        "so" : np.full(),
-        "so1" : np.full(),
-        "so11" : np.full(),
-        "so12" : np.full(),
-        "so2" : np.full(),
-        "sopc" : np.full(),
+        "so",
+        "so1",
+        "so11",
+        "so12",
+        "so2",
+        "sopc",
         # food
-        "f" : np.full(),
-        "f1" : np.full(),
-        "f11" : np.full(),
-        "f12" : np.full(),
-        "f2" : np.full(),
-        "fpc" : np.full()
-    }
-    output_var_names : ["pop","p1","p2","p3","p4","d1","d2","d3","d4","mat1","mat2","mat3","d","cdr",
+        "f",
+        "f1",
+        "f11",
+        "f12",
+        "f2",
+        "fpc"
+    ]
+    output_data_names = ["pop","p1","p2","p3","p4","d1","d2","d3","d4","mat1","mat2","mat3","d","cdr",
                         "fpu","le","lmc","lmf","lmhs","lmhs1","lmhs2","lmp","m1","m2","m3","m4","ehspc",
                         "hsapc","b","cbr","cmi","cmple","tf","dtf","dcfs","fce","fie","fm","frsn","mtf"
                         ,"nfc","ple","sfsn","aiopc","diopc","fcapc","fcfpc","fsafc"]
 
-    def __init__(self, residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
+    def __init__(self, exogenous_data_dict, input_variables_names, input_parameters_fixed_dict, residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
         super(self, MDODiscipline).__init__() # init the MDODiscipline parent class
-        self.population_init_params = {"year_min":year_min, "year_max":year_max, "dt":dt, "pyear":pyear, "verbose":verbose}
+        self.logger = logging.getLogger("population")
+        self.population_init_parameters = {"year_min":year_min, "year_max":year_max, "dt":dt, "pyear":pyear, "verbose":verbose}
 
-        self.input_var_names = list(Population_D.input_var_dict.keys())
-        self.exogeneous_var_names = list(Population_D.exogeneous_var_dict.keys())
-        self.output_var_names = Population_D.output_var_names
+        self.input_variables_names = input_variables_names
+        self.input_parameters_fixed_dict = input_parameters_fixed_dict
+        assert list(exogenous_data_dict.keys()) == Population_D.exogenous_data_names
+        self.exogenous_data_dict = exogenous_data_dict
+        self.output_data_names = Population_D.output_data_names
 
         self.input_grammar.update_from_names(self.input_var_names)
         self.output_grammar.update_from_names(self.output_var_names)
           
     def _run(self):
-            # shouldn't we use self.local_data[] instead?
-        input_vars_generator = self.get_inputs_by_name(self.input_var_names) # wtf?
-        input_var_values = next(input_vars_generator)
-        logger.debug("Values: %s", input_var_values)
-        assert len(input_var_values) == len(self.input_var_names)
+        ### Instantiate the Population class
+        _pop = Population(**self.population_init_parameters)
 
-        _pop = Population(**self.population_init_params)
+        # get the model parameters from GEMSEO --> this is what we're calibrating
+        input_dict = {key: value[0] for key, value in self.local_data if key in self.input_variables_names}
+        input_dict.update(self.input_parameters_fixed_dict)
+        self.logger.debug("input_dict=%s", input_dict)
 
-        input_var_dict = {_pop.input_var_names[i]: input_var_values[i] for i in range(len(input_var_values))}
-        logger.critical("generator: %s, values: %s", input_vars_generator, input_var_values)
-
-        _pop.init_population_constants(**input_var_dict)
+        _pop.init_population_constants(**input_dict)
         _pop.init_population_variables()
         _pop.set_population_table_functions(json_file= None) # edit the none to a path to a json file describing table function
         _pop.set_population_delay_functions(method="euler")
 
-            #_pop.init_exogenous_inputs() # useless c'est set par la boucle suivante:
-        for exo_var in _pop.exogeneous_var_names:
-            assert Population_D.exogeneous_var_dict[exo_var].shape[0] >= _pop.n
-            setattr(_pop, exo_var, Population_D.exogeneous_var_dict[exo_var])
+        ### Initialize the exogenous parameters (to the Population sector)
 
-                #_pop.loop0_population(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
+        #_pop.init_exogenous_inputs() # useless c'est set par la boucle suivante:
+        for exo_data in Population_D.exogenous_data_names:
+            assert self.exogenous_data_dict[exo_data].shape[0] >= _pop.n
+            setattr(_pop, exo_data, self.exogenous_data_dict[exo_data])
+
+            #_pop.loop0_population(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
             _pop.loop0_population(alone=False)
 
+
+        ### Run the model
         for k_ in range(1, _pop.n):
             _pop.loopk_population(k_-1, k_, k_-1, k_, alone=False)
 
-        for output in population_D.output_var_names:
+
+        ### Export output data (to be used by the Calibration discipline)
+        for output in Population_D.output_var_names:
             self.local_data[output] = getattr(_pop, output).copy()
 
 
@@ -189,14 +156,14 @@ class Population_D(MDODiscipline):
 """
 Description de l'idée:
 
-input_var_dict est le dictionnaire des variables d'optimisation possible, pour l'instant aucun tri
+input_dict est le dictionnaire des variables d'optimisation possible, pour l'instant aucun tri
 n'a été fait et il faudra enlever les variables "non calibrable" du style des initialisations de stocks
 la clé du dict est le nom de la var d'optim (var de design du design space de GEMSEO) et elle est 
 associé à un dict stockant: l_b la lower bound, u_p la upper bound, value, la valeur initiale
 pour faciliter la génération du design space cf plus bas le code:
 
 design_space = create_design_space()
-for key, values in Resource_D.input_var_dict:
+for key, values in Resource_D.input_dict:
     design_space.add_variable(key, 1, **values)
 
 
@@ -207,108 +174,45 @@ On a besoin des infos données par les modéliseurs pour définir les valeurs, e
 for exo_var in self.exogeneous_var_names:
             assert Resource_D.exogeneous_var_dict[exo_var].shape[0] >= self.n
             setattr(self, exo_var, Resource_D.exogeneous_var_dict[exo_var])
-
-
 """
-class Resource_D(MDODiscipline):
-    input_var_dict = {
-        "nri":   {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
-        "nruf1": {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
-        "nruf2": {"l_b":la lower bound, "u_b":la upper bound, "value":np.array([la val initiale])}
+
+
+def main():
+    logger = configure_logger(level=logging.INFO)
+    data = {
+        # template:
+        "fake_p1": {
+                "offset": 60, # beginning year-1900: 1950 -> 50
+                "data": np.full((40,), 2e9) # this is an example ofc
+            }, 
+        # TODO: to be filled
+
     }
-    exogeneous_var_dict = {
-        "pop": np.full(), 
-        "pop1": np.full(),
-        "ic": np.full(), 
-        "icir": np.full(), 
-        "icdr": np.full(), 
-        "io": np.full(), 
-        "iopc": np.full()
+    disc = [
+        Population_D(year_min=1900, year_max=2100, dt=1),
+        Calibration(data, "obj"),
+    ]
+
+    design_space = create_design_space()
+    vars = {
+        "len": {
+            "l_b": 20,
+            "u_b": 40,
+            "value": 28
+        }, # chosen arbitrary (except for the value)
     }
-    output_var_names = ["nr", "nrfr", "nruf", "nrur", "pcrum", "fcaor", "fcaor1", "fcaor2"]
+    for key, values in vars:
+        design_space.add_variable(key, 1, **values)
 
-    def __init__(self, residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
-        super(self, MDODiscipline).__init__() # init the MDODiscipline parent class
-        self.resource_init_params = {"year_min":year_min, "year_max":year_max, "dt":dt, "pyear":pyear, "verbose":verbose}
+    scenario = create_scenario(disc, "MDF", "obj", design_space)
+    # TODO: mind the chosen step
+    scenario.set_differentiation_method("finite_differences", 0.001)
 
-        self.input_var_names = list(Resource_D.input_var_dict.keys())
-        self.exogeneous_var_names = list(Resource_D.exogeneous_var_dict.keys())
-        self.output_var_names = Resource_D.output_var_names
+    # TODO: mind the max_iter
+    params = {"max_iter":100, "algo":"SLSQP"}
 
-        self.input_grammar.update_from_names(self.input_var_names)
-        self.output_grammar.update_from_names(self.output_var_names)
-        
-    def _run(self):
-        # shouldn't we use self.local_data[] instead?
-        input_vars_generator = self.get_inputs_by_name(self.input_var_names) # wtf?
-        input_var_values = next(input_vars_generator)
-        logger.debug("Values: %s", input_var_values)
-        assert len(input_var_values) == len(self.input_var_names)
+    scenario.execute(input_data=params)
+    print(design_space.get_current_value())
 
-        _res = Resource(**self.resource_init_params)
-
-        input_var_dict = {_res.input_var_names[i]: input_var_values[i] for i in range(len(input_var_values))}
-        logger.critical("generator: %s, values: %s", input_vars_generator, input_var_values)
-
-        _res.init_resource_constants(**input_var_dict)
-        _res.init_resource_variables()
-        _res.set_resource_table_functions(json_file= None) # edit the none to a path to a json file describing table function
-        _res.set_resource_delay_functions(method="euler")
-
-        #_res.init_exogenous_inputs() # useless c'est set par la boucle suivante:
-        for exo_var in _res.exogeneous_var_names:
-            assert Resource_D.exogeneous_var_dict[exo_var].shape[0] >= _res.n
-            setattr(_res, exo_var, Resource_D.exogeneous_var_dict[exo_var])
-
-        #_res.loop0_resource(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
-        _res.loop0_resource(alone=False)
-
-
-        for k_ in range(1, _res.n):
-            _res.loopk_resource(k_-1, k_, k_-1, k_, alone=False)
-
-        for output in Resource_D.output_var_names:
-            self.local_data[output] = getattr(_res, output).copy() # equ to: self.local_data["nr"] = _res.nr
-            # equivalent to: (but simpler)
-            # self.local_data["nr"] = _res.nr.copy()
-            # self.local_data["nrfr"] = _res.nrfr.copy()
-            # self.local_data["nruf"] = _res.nruf.copy()
-            # etc...
-
-
-#### Calibration section:
-class Calibration(MDODiscipline):
-    def __init__(self, data, output_name):
-        super().__init__() # init the MDODiscipline parent class
-        self.data_names = list(data.keys())
-        self.data = copy.deepcopy(data)
-        self.output_name = output_name
-        self.n = len(self.data_names)
-        self.d = len(self.data[self.data_names[0]])
-
-        self.input_grammar.update_from_names(self.data_names)
-        self.output_grammar.update_from_names([output_name])
-
-    def _run(self):
-        A = np.empty((self.n, self.d))
-        for i in range(self.n):
-            data_name = self.data_names[i]
-            A[i] = self.data[data_name] - self.local_data[data_name]
-            logger.debug("A[i]: %s | data[%s] %s", A[i], data_name, self.data[data_name])
-        self.local_data[self.output_name] = np.array([np.linalg.norm(A)])
-
-logger = configure_logger()
-
-#disc = [Resource_D(), Capital_D(), Pollution_D(), Population_D(), Agriculture_D(), World3_D()]
-disc = [Resource_D(year_min=1900, year_max=2100, dt=1), Calibration()]
-
-design_space = create_design_space()
-for key, values in Resource_D.input_var_dict:
-    design_space.add_variable(key, 1, **values)
-
-scenario = create_scenario(disc, "MDF", "obj", design_space)
-scenario.set_differentiation_method("finite_differences", 20)
-
-params = {"max_iter":10, "algo":"SLSQP"}
-
-scenario.execute(input_data=params)
+if __name__ == "__main__":
+    main()
