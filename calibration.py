@@ -97,11 +97,11 @@ class Population_D(MDODiscipline):
         "p2i": {"l_b":, "u_b":, "value":}
         "p3i": {"l_b":, "u_b":, "value":}
         "p4i": {"l_b":, "u_b":, "value":}
-        "dcfsn":{"l_b":, "u_b":, "value":}
+        "dcfsn":{"l_b":, "u_b":, "value":} #choisi pour l'exemple de calibration
         "fcest": {"l_b":, "u_b":, "value":}
         "hsid": {"l_b":, "u_b":, "value":}
         "ieat": {"l_b":, "u_b":, "value":}
-        "len": {"l_b":, "u_b":, "value":}
+        "len": {"l_b":, "u_b":, "value":} #choisi pour l'exemple de calibration
         "lpd": {"l_b":, "u_b":, "value":}
         "mtfn": {"l_b":, "u_b":, "value":}
         "pet": {"l_b":, "u_b":, "value":}
@@ -181,55 +181,7 @@ class Population_D(MDODiscipline):
 
         for output in population_D.output_var_names:
             self.local_data[output] = getattr(_pop, output).copy()
-    
-    def __init__(self,residual_form=False):
-        super(Population,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
 
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-class Capital_D(MDODiscipline,Capital):
-
-    def __init__(self,residual_form=False):
-        super(Capital,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-class Agriculture_D(MDODiscipline,Agriculture):
-
-    def __init__(self,residual_form=False):
-        super(Agriculture,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-    def _run(self):
-        #à compléter
-        pass
-
-
-
-class Pollution_D(MDODiscipline,Pollution):
-
-    def __init__(self,residual_form=False):
-        super(Pollution,self).__init__()
-        self.input_grammar.update_from_names() #à compléter
-        self.output_grammar.update_from_names() #à compléter
-    def _run(self):
-        #à compléter
-        pass
-
-
-        for k_ in range(1, self.n):
-            _pol.loopk_pollution(k_-1, k_, k_-1, k_)
 
 
 """
