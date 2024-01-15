@@ -30,7 +30,7 @@ class Calibration(MDODiscipline):
         for data_name in self.data_names:
             start = self.data_dict[data_name]["offset"]
             end = start + len(self.data_dict[data_name]["data"])
-            diff = self.data[data_name]["data"] - self.local_data[data_name][start:end]
+            diff = self.data_dict[data_name]["data"] - self.local_data[data_name][start:end]
 
             norms.append(np.linalg.norm(diff))
             self.logger.debug("A[i]=%s, diff=%s", norms[-1], diff)

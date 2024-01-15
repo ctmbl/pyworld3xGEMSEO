@@ -111,8 +111,18 @@ class Population_D(MDODiscipline):
     def _run(self):
         ### Instantiate the Population class
         _pop = Population(**self.population_init_parameters)
+        # TODO: réfléchir à faire ca mieux:
+        _pop.sfpc = 230 # nécessaire pour faire tourner le secteur seul, paramètre scalaire de agriculture
 
-        # get the model parameters from GEMSEO --> this is what we're calibrating
+        ### Initialize the exogenous parameters (to the Population sector)
+
+        #_pop.init_exogenous_inputs() # useless c'est set par la boucle suivante:
+        for exo_data in Population_D.exogenous_data_names:
+            assert self.exogenous_data_dict[exo_data].shape[0] >= _pop.n
+            setattr(_pop, exo_data, self.exogenous_data_dict[exo_data])
+            self.logger.debug("Set the exogenous data '%s'", exo_data)
+
+        ### Get the model parameters from GEMSEO --> this is what we're calibrating
         input_dict = {key: value[0] for key, value in self.local_data.items() if key in self.input_variables_names}
         input_dict.update(self.input_parameters_fixed_dict)
         self.logger.debug("input_dict=%s", input_dict)
@@ -122,15 +132,8 @@ class Population_D(MDODiscipline):
         _pop.set_population_table_functions(json_file= None) # edit the none to a path to a json file describing table function
         _pop.set_population_delay_functions(method="euler")
 
-        ### Initialize the exogenous parameters (to the Population sector)
-
-        #_pop.init_exogenous_inputs() # useless c'est set par la boucle suivante:
-        for exo_data in Population_D.exogenous_data_names:
-            assert self.exogenous_data_dict[exo_data].shape[0] >= _pop.n
-            setattr(_pop, exo_data, self.exogenous_data_dict[exo_data])
-
-            #_pop.loop0_population(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
-            _pop.loop0_population(alone=False)
+        #_pop.loop0_population(alone=True) # --> on veut pas faire ca justement car on utiliserait les fausses courbes de pop1 par defaut de pyworld3
+        _pop.loop0_population(alone=False)
 
 
         ### Run the model
@@ -139,7 +142,7 @@ class Population_D(MDODiscipline):
 
 
         ### Export output data (to be used by the Calibration discipline)
-        for output in Population_D.output_var_names:
+        for output in Population_D.output_data_names:
             self.local_data[output] = getattr(_pop, output).copy()
 
 
@@ -171,7 +174,7 @@ for exo_var in self.exogeneous_var_names:
 def dict_real_data_to_match(filename):
     data_frame = pd.read_csv(filename, sep=" ")
     d = data_frame.to_dict()
-    d = {key: np.array((val.values())) for key, val in d.items()}
+    d = {key: np.array(list(val.values())) for key, val in d.items()}
     return d
 
 
