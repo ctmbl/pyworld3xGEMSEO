@@ -38,9 +38,12 @@ import logging
 from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
 import numpy as np
+import pandas as pd
 
 from pyworld3 import World3, Population, Pollution, Agriculture, Capital, Resource, hello_world3
 from calibration_d import Calibration
+from export_exogenous import get_exogenous_data
+
 """
 TODO: 
 separate calibration in (at least) two parts/disciplines:
@@ -76,26 +79,14 @@ class Population_D(MDODiscipline):
     exogenous_data_names = [
         # industrial output
         "io",
-        "io1",
-        "io11",
-        "io12",
-        "io2",
         "iopc",
         # index of persistent pollution
         "ppolx",
         # service output
         "so",
-        "so1",
-        "so11",
-        "so12",
-        "so2",
         "sopc",
         # food
         "f",
-        "f1",
-        "f11",
-        "f12",
-        "f2",
         "fpc"
     ]
     output_data_names = ["pop","p1","p2","p3","p4","d1","d2","d3","d4","mat1","mat2","mat3","d","cdr",
@@ -103,10 +94,10 @@ class Population_D(MDODiscipline):
                         "hsapc","b","cbr","cmi","cmple","tf","dtf","dcfs","fce","fie","fm","frsn","mtf"
                         ,"nfc","ple","sfsn","aiopc","diopc","fcapc","fcfpc","fsafc"]
 
-    def __init__(self, exogenous_data_dict, input_variables_names, input_parameters_fixed_dict, residual_form=False, year_min=1900, year_max=2100, dt=1, pyear=1975, verbose=False):
-        super(self, MDODiscipline).__init__() # init the MDODiscipline parent class
+    def __init__(self, exogenous_data_dict, input_variables_names, input_parameters_fixed_dict, residual_form=False, year_min=1900, year_max=2100, dt=1, verbose=False):
+        super().__init__() # init the MDODiscipline parent class
         self.logger = logging.getLogger("population")
-        self.population_init_parameters = {"year_min":year_min, "year_max":year_max, "dt":dt, "pyear":pyear, "verbose":verbose}
+        self.population_init_parameters = {"year_min":year_min, "year_max":year_max, "dt":dt, "verbose":verbose}
 
         self.input_variables_names = input_variables_names
         self.input_parameters_fixed_dict = input_parameters_fixed_dict
@@ -114,15 +105,15 @@ class Population_D(MDODiscipline):
         self.exogenous_data_dict = exogenous_data_dict
         self.output_data_names = Population_D.output_data_names
 
-        self.input_grammar.update_from_names(self.input_var_names)
-        self.output_grammar.update_from_names(self.output_var_names)
+        self.input_grammar.update_from_names(self.input_variables_names)
+        self.output_grammar.update_from_names(self.output_data_names)
           
     def _run(self):
         ### Instantiate the Population class
         _pop = Population(**self.population_init_parameters)
 
         # get the model parameters from GEMSEO --> this is what we're calibrating
-        input_dict = {key: value[0] for key, value in self.local_data if key in self.input_variables_names}
+        input_dict = {key: value[0] for key, value in self.local_data.items() if key in self.input_variables_names}
         input_dict.update(self.input_parameters_fixed_dict)
         self.logger.debug("input_dict=%s", input_dict)
 
@@ -177,23 +168,26 @@ for exo_var in self.exogeneous_var_names:
 """
 
 
+def dict_real_data_to_match(filename):
+    data_frame = pd.read_csv(filename, sep=" ")
+    d = data_frame.to_dict()
+    d = {key: np.array((val.values())) for key, val in d.items()}
+    return d
+
+
 def main():
     logger = configure_logger(level=logging.INFO)
+    """ Example of data format:
     data = {
-        # template:
         "fake_p1": {
                 "offset": 60, # beginning year-1900: 1950 -> 50
                 "data": np.full((40,), 2e9) # this is an example ofc
             }, 
-        # TODO: to be filled
-
     }
-    disc = [
-        Population_D(year_min=1900, year_max=2100, dt=1),
-        Calibration(data, "obj"),
-    ]
+    """
+    d = dict_real_data_to_match("real_data_to_match.txt")
+    data = {key: {"offset": 60, "data": val} for key, val in d.items()}
 
-    design_space = create_design_space()
     vars = {
         "len": {
             "l_b": 20,
@@ -201,7 +195,21 @@ def main():
             "value": 28
         }, # chosen arbitrary (except for the value)
     }
-    for key, values in vars:
+
+    disc = [
+        Population_D(
+            exogenous_data_dict = get_exogenous_data(Population_D.exogenous_data_names),
+            input_variables_names = list(vars.keys()),
+            input_parameters_fixed_dict = {}, # TODO: to be filled
+            year_min=1900,
+            year_max=2100,
+            dt=1
+        ),
+        Calibration(data, "obj"),
+    ]
+
+    design_space = create_design_space()
+    for key, values in vars.items():
         design_space.add_variable(key, 1, **values)
 
     scenario = create_scenario(disc, "MDF", "obj", design_space)
