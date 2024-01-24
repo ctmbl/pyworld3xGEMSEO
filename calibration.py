@@ -37,6 +37,8 @@ import logging
 
 from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
+import matplotlib.pyplot as plt
+from matplotlib import animation
 import numpy as np
 import pandas as pd
 
@@ -147,6 +149,36 @@ class Population_D(MDODiscipline):
 
 
 
+class Animation(MDODiscipline):
+    def __init__(self, data, data_names):
+        super().__init__() # init the MDODiscipline parent class
+        self.logger = logging.getLogger(__name__)
+
+        self.data_names = data_names
+        self.data = data
+        self.input_grammar.update_from_names(data_names)
+
+        self.fig, self.axs = plt.subplots(nrows=1, ncols=1)
+        self.artists = []
+        self.interval = 1000
+        self.x = list(range(200))
+
+    def _run(self):
+        pop = self.local_data["p1"] + self.local_data["p2"] + self.local_data["p3"] + self.local_data["p4"]
+        container = self.axs.plot(self.x, pop, color="blue", label=f"{self.n_calls}")
+        self.artists.append(container)
+
+    def show(self):
+        ani = animation.ArtistAnimation(fig=self.fig, artists=self.artists, interval=self.interval)
+        plt.legend()
+        pop_data = self.data["p1"]["data"] + self.data["p2"]["data"] + self.data["p3"]["data"] + self.data["p4"]["data"]
+        start = self.data["p1"]["offset"]
+        end = self.data["p1"]["offset"] + len(self.data["p1"]["data"])
+        plt.plot(range(start, end), pop_data, color="red")
+        plt.show()
+
+
+
 """
 Description de l'idée:
 
@@ -209,6 +241,7 @@ def main():
             dt=1
         ),
         Calibration(data, "obj"),
+        Animation(data, ["p1", "p2", "p3", "p4"]),
     ]
 
     design_space = create_design_space()
@@ -224,6 +257,8 @@ def main():
 
     scenario.execute(input_data=params)
     print(design_space.get_current_value())
+
+    disc[2].show()
 
 if __name__ == "__main__":
     main()
