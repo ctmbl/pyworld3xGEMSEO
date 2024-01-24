@@ -39,6 +39,7 @@ from gemseo.core.discipline import MDODiscipline
 from gemseo import create_design_space, create_scenario, configure_logger
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from matplotlib.widgets import Button, Slider
 import numpy as np
 import pandas as pd
 
@@ -158,23 +159,49 @@ class Animation(MDODiscipline):
         self.data = data
         self.input_grammar.update_from_names(data_names)
 
-        self.fig, self.axs = plt.subplots(nrows=1, ncols=1)
+        self.fig, self.ax = plt.subplots(nrows=1, ncols=1)
         self.artists = []
         self.interval = 1000
         self.x = list(range(200))
 
     def _run(self):
         pop = self.local_data["p1"] + self.local_data["p2"] + self.local_data["p3"] + self.local_data["p4"]
-        container = self.axs.plot(self.x, pop, color="blue", label=f"{self.n_calls}")
-        self.artists.append(container)
+        self.artists.append(pop)
 
     def show(self):
-        ani = animation.ArtistAnimation(fig=self.fig, artists=self.artists, interval=self.interval)
-        plt.legend()
+        n_step = len(self.artists)
+
+        # Make room for the slider
+        self.fig.subplots_adjust(left=0.1, bottom=0.25)
+
+        # Slider
+        ax_slider = self.fig.add_axes([0.25, 0.1, 0.65, 0.03])
+        step_slider = Slider(
+            ax=ax_slider,
+            label="Optimisation",
+            valmin=1,
+            valmax=n_step,
+            valinit=1,
+            orientation="horizontal"
+        )
+
+        # Plot simulated data
+        line, = self.ax.plot(self.x, self.artists[0], color="blue")
+
+        # Update the plot on slider changes
+        def update(val):
+            line.set_ydata(self.artists[int(step_slider.val)-1])
+            self.fig.canvas.draw_idle()
+        step_slider.on_changed(update)
+
+        # Plot the real data
         pop_data = self.data["p1"]["data"] + self.data["p2"]["data"] + self.data["p3"]["data"] + self.data["p4"]["data"]
         start = self.data["p1"]["offset"]
         end = self.data["p1"]["offset"] + len(self.data["p1"]["data"])
-        plt.plot(range(start, end), pop_data, color="red")
+        self.ax.plot(range(start, end), pop_data, color="red")
+
+        self.ax.set_xlabel("Years from 1900")
+        self.ax.set_ylabel("Population")
         plt.show()
 
 
