@@ -156,26 +156,32 @@ class Animation(MDODiscipline):
         self.logger = logging.getLogger(__name__)
 
         self.data_names = data_names
+        self.n_data = len(data_names)
         self.data = data
         self.input_grammar.update_from_names(data_names)
 
-        self.fig, self.ax = plt.subplots(nrows=1, ncols=1)
+        ncols = 4
+        nrows = int(np.ceil(self.n_data // ncols))
+        self.fig, self.axes = plt.subplots(nrows=nrows, ncols=ncols)
+        self.axes = self.axes.flatten()
+
         self.artists = []
-        self.interval = 1000
-        self.x = list(range(200))
 
     def _run(self):
-        pop = self.local_data["p1"] + self.local_data["p2"] + self.local_data["p3"] + self.local_data["p4"]
-        self.artists.append(pop)
+        all_data = [self.local_data[data].copy() for data in self.data_names]
+        self.artists.append(all_data)
 
     def show(self):
+        # Heavily inspired from:
+        # https://matplotlib.org/stable/gallery/widgets/slider_demo.html
+
         n_step = len(self.artists)
 
         # Make room for the slider
-        self.fig.subplots_adjust(left=0.1, bottom=0.25)
+        self.fig.subplots_adjust(left=0.1, bottom=0.20)
 
         # Slider
-        ax_slider = self.fig.add_axes([0.25, 0.1, 0.65, 0.03])
+        ax_slider = self.fig.add_axes([0.20, 0.1, 0.65, 0.03])
         step_slider = Slider(
             ax=ax_slider,
             label="Optimisation",
@@ -186,22 +192,28 @@ class Animation(MDODiscipline):
         )
 
         # Plot simulated data
-        line, = self.ax.plot(self.x, self.artists[0], color="blue")
+        lines = []
+        for i in range(self.n_data):
+                lines.extend(self.axes[i].plot(self.artists[0][i], color="blue"))
 
         # Update the plot on slider changes
         def update(val):
-            line.set_ydata(self.artists[int(step_slider.val)-1])
+            for i in range(self.n_data):
+                lines[i].set_ydata(self.artists[int(step_slider.val)-1][i])
             self.fig.canvas.draw_idle()
         step_slider.on_changed(update)
 
         # Plot the real data
-        pop_data = self.data["p1"]["data"] + self.data["p2"]["data"] + self.data["p3"]["data"] + self.data["p4"]["data"]
-        start = self.data["p1"]["offset"]
-        end = self.data["p1"]["offset"] + len(self.data["p1"]["data"])
-        self.ax.plot(range(start, end), pop_data, color="red")
 
-        self.ax.set_xlabel("Years from 1900")
-        self.ax.set_ylabel("Population")
+        for i in range(self.n_data):
+            data_name = self.data_names[i]
+
+            start = self.data[data_name]["offset"]
+            end = self.data[data_name]["offset"] + len(self.data[data_name]["data"])
+
+            self.axes[i].plot(range(start, end), self.data[data_name]["data"], color="red", label="Real data")
+            self.axes[i].set_xlabel("Years from 1900")
+            self.axes[i].set_ylabel(data_name)
         plt.show()
 
 
@@ -268,7 +280,7 @@ def main():
             dt=1
         ),
         Calibration(data, "obj"),
-        Animation(data, ["p1", "p2", "p3", "p4"]),
+        Animation(data, ["p1", "p2", "p3", "p4", "d1", "d2", "d3", "d4"]),
     ]
 
     design_space = create_design_space()
