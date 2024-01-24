@@ -28,9 +28,18 @@ class Calibration(MDODiscipline):
     def _run(self):
         norms = []
         for data_name in self.data_names:
+            # This is dumb because these computation are the same (on real data)
+            # at each call of _run, they don't depend on simulated data (local_data)
+            real_data = self.data_dict[data_name]["data"]
+            _max = np.max(real_data)
+            real_normalized_data = real_data / _max
+
             start = self.data_dict[data_name]["offset"]
-            end = start + len(self.data_dict[data_name]["data"])
-            diff = self.data_dict[data_name]["data"] - self.local_data[data_name][start:end]
+            end = start + len(real_data)
+            simulated_data = self.local_data[data_name][start:end]
+            simulated_normalized_data = simulated_data / _max
+
+            diff = simulated_normalized_data - real_normalized_data
 
             norms.append(np.linalg.norm(diff))
             self.logger.debug("A[i]=%s, diff=%s", norms[-1], diff)
