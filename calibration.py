@@ -47,18 +47,6 @@ from pyworld3 import World3, Population, Pollution, Agriculture, Capital, Resour
 from calibration_d import Calibration
 from export_exogenous import get_exogenous_data
 
-"""
-TODO: 
-separate calibration in (at least) two parts/disciplines:
-    - a "simulation" part that runs pyworld3 model and output every data possible
-    - a "calibration" part that computes from the 1st the objective fucntion (with respect to calibration data) 
-      for this second one a GEMSEO plugin already exists to provide the appropriate Discipline
-
-separate the World3_D discipline into 5 sectors
-each sectors will take data as input and output some other data, this will be coupling between disciplines
-this will allow us to calibrate each sectors independently of the other
-"""
-
 
 class Population_D(MDODiscipline):
         
@@ -218,7 +206,10 @@ class Animation(MDODiscipline):
 
 
 
+# TODO: fix ca:
 """
+OBSOLETE JE CROIS:
+
 Description de l'idée:
 
 input_dict est le dictionnaire des variables d'optimisation possible, pour l'instant aucun tri
