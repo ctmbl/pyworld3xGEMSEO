@@ -324,12 +324,13 @@ def main():
         design_space.add_variable(key, 1, **values)
 
     scenario = create_scenario(disc, "MDF", "obj", design_space)
-    # TODO: mind the chosen step
-    scenario.set_differentiation_method("finite_differences", 0.001)
+    # NOTE: mind the chosen step
+    scenario.set_differentiation_method("finite_differences", 0.01)
 
-    # TODO: mind the max_iter
-    params = {"max_iter":500, "algo":"NLOPT_BOBYQA","algo_options" : {"xtol_rel" : 1e-4 , "ftol_rel" : 1e-6 }} 
-
+    # NOTE: mind the max_iter
+    # https://gemseo.readthedocs.io/en/stable/algorithms/opt_algos.html#pdfo-cobyla
+    # params = {"max_iter":500, "algo":"NLOPT_COBYLA","algo_options" : {"xtol_rel" : 1e-4 , "ftol_rel" : 1e-6 }}
+    params = {"max_iter":500, "algo":"NLOPT_BOBYQA","algo_options" : {"xtol_rel" : 1e-4 , "ftol_rel" : 1e-6 }}
 
     scenario.execute(input_data=params)
     scenario.post_process("OptHistoryView", save=True, show=False)
