@@ -262,21 +262,66 @@ def main():
     d = dict_real_data_to_match("real_data_to_match.txt")
     data = {key: {"offset": 60, "data": val} for key, val in d.items()}
 
+    
     vars = {
-        "len": {
-            "l_b": 20,
-            "u_b": 40,
-            "value": 28
-        }, # chosen arbitrary (except for the value)
+    "len" : {
+        "l_b": 20,
+        "u_b": 80,#40
+        "value": 28 
+    },
+    "dcfsn": { #très intéressant de la "cross-valider" par la suite car on suppose qu'elle aura tendance à beaucoup changer d'une génénration à l'autre
+        "l_b": 0,
+        "u_b": 8,
+        "value": 4 
+    },
+    "hsid" : {
+        "l_b": 0.1,
+        "u_b": 40,
+        "value": 20 
+    },
+    "ieat" : {
+        "l_b": 0.1,
+        "u_b": 6,
+        "value": 3 
+    },
+    "lpd" : {
+        "l_b": 1,
+        "u_b": 80,
+        "value": 20 
+    },
+    "mtfn" : {
+        "l_b": 2,
+        "u_b": 16,
+        "value": 12 
+    },
+    "rlt" : {
+        "l_b": 10,
+        "u_b": 40,
+        "value": 30 
+    },
+    "sad" : {
+    
+        "l_b": 0.01,
+        "u_b": 80,
+        "value": 20 
     }
+            
+}
+    
 
     disc = [
         Population_D(
             exogenous_data_dict = get_exogenous_data(Population_D.exogenous_data_names),
             input_variables_names = list(vars.keys()),
-            input_parameters_fixed_dict = {}, # TODO: to be filled
+             input_parameters_fixed_dict = {
+                "p1i" : 65e7,
+                "p2i" : 70e7,
+                "p3i" :19e7,
+                "p4i" : 6e7,
+                 
+                }, # TODO: to be filled
             year_min=1900,
-            year_max=2100,
+            year_max=2021,
             dt=1
         ),
         Calibration(data, "obj"),
@@ -292,9 +337,11 @@ def main():
     scenario.set_differentiation_method("finite_differences", 0.001)
 
     # TODO: mind the max_iter
-    params = {"max_iter":100, "algo":"SLSQP"}
+    params = {"max_iter":500, "algo":"NLOPT_BOBYQA","algo_options" : {"xtol_rel" : 1e-4 , "ftol_rel" : 1e-6 }} 
+
 
     scenario.execute(input_data=params)
+    scenario.post_process("OptHistoryView", save=True, show=False)
     print(design_space.get_current_value())
 
     disc[2].show()
